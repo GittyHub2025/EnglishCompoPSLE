@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>English Composition Flashcards</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overscroll-behavior: none;
+            -webkit-tap-highlight-color: transparent; /* Prevent tap highlight on mobile */
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-8px); }
+            20%, 40%, 60%, 80% { transform: translateX(8px); }
+        }
+        .shake { animation: shake 0.5s ease-in-out; }
+
+        /* Vertical Flip Animation for Correct Answer */
+        @keyframes vertical-flip-reveal {
+            0% {
+                transform: perspective(1000px) rotateX(0deg);
+                background-color: white;
+                color: #374151; /* Default text color (e.g., gray-700) */
+            }
+            49% {
+                transform: perspective(1000px) rotateX(-90deg);
+                background-color: white;
+                color: #374151;
+            }
+            50% { /* Content invisible, switch properties */
+                transform: perspective(1000px) rotateX(-90deg);
+                background-color: #22c55e; /* Green-500 */
+                color: white;
+            }
+            100% {
+                transform: perspective(1000px) rotateX(0deg);
+                background-color: #22c55e; /* Green-500 */
+                color: white;
+            }
+        }
+        .correct-flip {
+            animation: vertical-flip-reveal 0.6s forwards;
+        }
+        .correct-flip #questionText,
+        .correct-flip #feedbackText,
+        .correct-flip #questionImagePlaceholder {
+            color: white !important;
+        }
+
+        /* Incorrect Answer State */
+        .incorrect-state {
+            background-color: #ef4444; /* Red-500 */
+            color: white;
+            border-color: #b91c1c !important; /* Red-700 for border */
+        }
+        .incorrect-state #questionText,
+        .incorrect-state #feedbackText,
+        .incorrect-state #questionImagePlaceholder {
+            color: white !important;
+        }
+
+
+        /* Button base styles */
+        .choice-button, .action-button {
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            border-radius: 0.5rem;
+            font-weight: 600;
+            padding: 0.75rem 0.5rem;
+            text-align: center;
+            border: 1px solid transparent; /* Base border */
+        }
+        /* Button hover/active states */
+        .choice-button:hover, .action-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+        }
+        .choice-button:active, .action-button:active {
+            transform: translateY(0px);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        .choice-button:disabled {
+            opacity: 0.8;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .choice-button:disabled:hover {
+             transform: none;
+             box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+        }
+
+
+        .clickable-card { cursor: pointer; }
+        #progressBarFill { transition: width 0.3s ease-out; }
+        #confettiCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9999; }
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); align-items: center; justify-content: center; }
+        .modal-content { background-color: #fefefe; margin: auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 500px; border-radius: 0.5rem; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+        .modal-close-button { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+        .modal-close-button:hover, .modal-close-button:focus { color: black; text-decoration: none; cursor: pointer; }
+
+        .race-track-container { position: relative; width: 100%; height: 30px; margin-top: 20px; margin-bottom: 20px; z-index: 1; }
+        .race-track { position: absolute; bottom: 0; left: 0; width: calc(100% - 30px); height: 10px; background-color: #d1d5db; border-radius: 5px; z-index: 2; }
+        .race-track-fill { position: absolute; bottom: 0; left: 0; height: 10px; background-color: #3b82f6; border-radius: 5px; width: 0%; z-index: 3; }
+        .rocket { position: absolute; bottom: -8px; left: 0; font-size: 36px; transform: translateX(-50%); z-index: 10; }
+        .checkered-flag { position: absolute; bottom: -8px; right: 0; font-size: 24px; transform: translateX(50%); z-index: 10; }
+
+        #questionText { word-break: break-word; hyphens: auto; }
+        .choice-button { white-space: normal; word-break: break-word; line-height: 1.4; min-height: 60px; display: flex; align-items: center; justify-content: center; }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gradient-to-br from-sky-200 via-cyan-200 to-teal-200 min-h-screen flex items-center justify-center p-4">
+
+    <div id="appContainer" class="w-full max-w-md mx-auto">
+
+        <!-- Name Input Modal -->
+         <div id="nameModal" class="modal">
+             <div class="modal-content text-center">
+                 <h2 class="text-xl md:text-2xl font-semibold mb-4 text-sky-800">Welcome, Composition Whiz!</h2>
+                 <p class="text-slate-600 mb-4">Please enter your name to get started.</p>
+                 <input type="text" id="userNameInput" placeholder="Your Name" class="w-full p-2 border border-slate-300 rounded mb-4 focus:ring-sky-500 focus:border-sky-500 text-center text-lg">
+                 <button onclick="saveUserName()" class="action-button bg-sky-500 hover:bg-sky-600 text-white w-full py-3 px-6 text-lg">Start Revising!</button>
+             </div>
+         </div>
+
+        <!-- Set Selection Screen -->
+        <div id="setSelectionScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg text-center">
+            <h1 class="text-2xl md:text-3xl font-bold text-sky-800 mb-6">PSLE English Composition Revision</h1>
+            <p class="text-slate-600 mb-8">Choose a set to start your practice:</p>
+            <div id="setButtonsContainer" class="grid grid-cols-1 gap-4">
+                <!-- Set buttons will be dynamically added here -->
+            </div>
+             <!-- Webhook settings button will be added below this container -->
+        </div>
+
+        <!-- Flashcard Screen -->
+        <div id="flashcardScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg">
+            <div class="mb-6">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm font-medium text-slate-600">Progress</span>
+                    <span id="progressText" class="text-sm font-medium text-sky-700">0 / 20</span> </div>
+                <div class="w-full bg-slate-200 rounded-full h-2.5">
+                    <div id="progressBarFill" class="bg-sky-600 h-2.5 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div id="flashcard" class="bg-white border border-slate-300 rounded-lg p-6 mb-6 text-center min-h-[200px] flex flex-col items-center justify-center transition-all duration-200">
+                 <div id="flashcardContent" class="w-full">
+                     <img id="questionImage" src="" alt="Question image" class="hidden mx-auto mb-4 max-h-40 h-auto w-auto object-contain rounded">
+                     <p id="questionText" class="text-lg md:text-xl font-semibold text-slate-800"></p>
+                     <p id="feedbackText" class="mt-2 text-base md:text-lg font-semibold"></p>
+                     <p id="continueText" class="mt-4 text-sm text-slate-500 hidden">Tap card to continue...</p>
+                 </div>
+            </div>
+
+            <div id="answerChoices" class="grid grid-cols-1 gap-3 md:gap-4">
+                <button id="choice1" onclick="checkAnswer(this)" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg"></button>
+                <button id="choice2" onclick="checkAnswer(this)" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg"></button>
+                <button id="choice3" onclick="checkAnswer(this)" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg"></button>
+            </div>
+             <button onclick="showSetSelection()" class="action-button mt-6 bg-slate-500 hover:bg-slate-600 text-white w-full text-sm py-3 px-6">Back to Set Selection</button>
+        </div>
+
+        <!-- Results Screen -->
+        <div id="resultsScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg text-center">
+            <h2 id="resultsHeading" class="text-2xl md:text-3xl font-bold text-sky-800 mb-4"></h2>
+
+            <div class="bg-emerald-500 text-white p-4 rounded-lg mb-6">
+                <p class="text-lg md:text-xl font-semibold mb-1">Your Score:</p>
+                <p id="scoreDisplay" class="text-4xl md:text-5xl font-bold italic"></p>
+            </div>
+
+            <div class="race-track-container">
+                <div class="race-track"></div>
+                <div id="raceTrackFill" class="race-track-fill"></div>
+                <span id="rocketEl" class="rocket">🚀</span>
+                <span id="checkeredFlag" class="checkered-flag">🏁</span>
+            </div>
+            <p class="text-lg text-slate-700 mb-2">Percentage: <span id="percentage" class="font-semibold"></span>%</p>
+            <p class="text-lg text-slate-700 mb-6">Time: <span id="timeTaken" class="font-semibold"></span> seconds</p>
+
+            <p id="encouragementText" class="text-lg text-sky-700 font-semibold mb-6"></p>
+            <div id="incorrectListContainer" class="mb-6 text-left">
+                <h3 class="text-xl font-semibold text-red-600 mb-3">Review Incorrect Answers:</h3>
+                <ul id="incorrectList" class="list-disc list-inside space-y-1 text-slate-600"></ul>
+                 <p id="noIncorrectText" class="text-emerald-600 font-semibold hidden">Great job, no incorrect answers!</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button id="redoIncorrectButton" onclick="redoIncorrect()" class="action-button bg-orange-500 hover:bg-orange-600 text-white w-full py-3 px-6">Redo Incorrect</button>
+                <button onclick="showSetSelection()" class="action-button bg-sky-500 hover:bg-sky-600 text-white w-full py-3 px-6">Choose New Set</button>
+            </div>
+        </div>
+
+        <!-- Webhook Settings Modal -->
+        <div id="webhookModal" class="modal">
+          <div class="modal-content">
+            <span class="modal-close-button" onclick="closeWebhookModal()">×</span>
+            <h2 class="text-xl font-semibold mb-4 text-sky-800">Webhook Setup</h2>
+            <p class="text-slate-600 mb-4">Enter your Make.com (or other service) webhook URL below to send results data automatically.</p>
+            <input type="url" id="webhookUrlInput" placeholder="https://hook.make.com/xxxxxxxxxxxx" class="w-full p-2 border border-slate-300 rounded mb-4 focus:ring-sky-500 focus:border-sky-500">
+             <p class="text-xs text-slate-500 mb-4">You can change this later if needed.</p>
+            <button onclick="saveWebhookUrl()" class="action-button bg-emerald-500 hover:bg-emerald-600 text-white py-2 px-4">Save URL</button>
+          </div>
+        </div>
+    </div>
+
+    <canvas id="confettiCanvas"></canvas>
+
+    <script>
+        // --- Configuration ---
+        const QUESTIONS_PER_SET = 20;
+        const TOTAL_SETS = 5; // This will be determined by the number of sets in allEnglishQuestions
+        const AUTO_PROCEED_DELAY = 800;
+        const DEFAULT_WEBHOOK_URL = 'https://hook.us2.make.com/dsnznsn7akpd4ccnl8h1w5j1pmullftg';
+        const USER_NAME_STORAGE_KEY = 'englishCompUserName';
+        const WEBHOOK_URL_STORAGE_KEY = 'englishCompWebhookUrl';
+
+        // --- English Composition Questions Data ---
+        const allEnglishQuestionsBySet = [
+            // --- SET 1: Story Elements & Basic Structure ---
+            [
+                { id: 's1q1', question: "What is the main problem or struggle in a story called?", options: ["The resolution", "The conflict", "The setting"], correctAnswer: "The conflict", image: null },
+                { id: 's1q2', question: "The time and place where a story happens is known as the:", options: ["Plot", "Character", "Setting"], correctAnswer: "Setting", image: null },
+                { id: 's1q3', question: "Which part of the story introduces the main characters and setting?", options: ["Climax", "Beginning (Exposition)", "Falling action"], correctAnswer: "Beginning (Exposition)", image: null },
+                { id: 's1q4', question: "The sequence of events in a story is called the:", options: ["Theme", "Plot", "Dialogue"], correctAnswer: "Plot", image: null },
+                { id: 's1q5', question: "What is the most exciting or turning point of a story called?", options: ["Introduction", "Climax", "Conclusion"], correctAnswer: "Climax", image: null },
+                { id: 's1q6', question: "The way a problem is solved in a story is the:", options: ["Conflict", "Rising action", "Resolution"], correctAnswer: "Resolution", image: null },
+                { id: 's1q7', question: "The main idea or message the author wants to convey is the:", options: ["Setting", "Theme", "Plot twist"], correctAnswer: "Theme", image: null },
+                { id: 's1q8', question: "A person or animal in a story is a:", options: ["Narrator", "Character", "Antagonist"], correctAnswer: "Character", image: null },
+                { id: 's1q9', question: "A good story usually has a clear:", options: ["Beginning, middle, and end", "Beginning and end only", "Middle only"], correctAnswer: "Beginning, middle, and end", image: null },
+                { id: 's1q10', question: "What is the purpose of an introduction in a composition?", options: ["To solve the main problem", "To confuse the reader", "To grab the reader's attention and introduce the topic"], correctAnswer: "To grab the reader's attention and introduce the topic", image: null },
+                { id: 's1q11', question: "Which of these is NOT a key element of a story plot?", options: ["Rising action", "Author's biography", "Falling action"], correctAnswer: "Author's biography", image: null },
+                { id: 's1q12', question: "The main character who faces the conflict is often called the:", options: ["Antagonist", "Protagonist", "Supporting character"], correctAnswer: "Protagonist", image: null },
+                { id: 's1q13', question: "The character or force that opposes the main character is the:", options: ["Protagonist", "Narrator", "Antagonist"], correctAnswer: "Antagonist", image: null },
+                { id: 's1q14', question: "Why is it important to plan your story before writing?", options: ["It makes the story shorter", "It helps organize ideas and ensures a clear plot", "It is not important at all"], correctAnswer: "It helps organize ideas and ensures a clear plot", image: null },
+                { id: 's1q15', question: "What does 'point of view' refer to in a story?", options: ["The main problem", "Who is telling the story", "The story's ending"], correctAnswer: "Who is telling the story", image: null },
+                { id: 's1q16', question: "A good conclusion should:", options: ["Introduce new characters", "Leave the reader confused", "Provide a sense of closure"], correctAnswer: "Provide a sense of closure", image: null },
+                { id: 's1q17', question: "Events that lead up to the climax are part of the:", options: ["Resolution", "Rising action", "Exposition"], correctAnswer: "Rising action", image: null },
+                { id: 's1q18', question: "Events that happen after the climax and lead to the resolution are called:", options: ["Falling action", "Introduction", "Theme development"], correctAnswer: "Falling action", image: null },
+                { id: 's1q19', question: "If a story teaches a lesson about honesty, 'honesty' is likely part of its:", options: ["Setting", "Climax", "Theme"], correctAnswer: "Theme", image: null },
+                { id: 's1q20', question: "A new paragraph usually starts when there is a change in:", options: ["The weather only", "Topic, speaker, time, or place", "The story's title"], correctAnswer: "Topic, speaker, time, or place", image: null }
+            ],
+            // --- SET 2: Grammar & Punctuation ---
+            [
+                { id: 's2q1', question: "Choose the correct sentence: The cat licked ___ paws.", options: ["it's", "its'", "its"], correctAnswer: "its", image: null },
+                { id: 's2q2', question: "Which sentence uses 'their', 'there', or 'they're' correctly?", options: ["Their going to the park.", "The books are over they're.", "The students left their bags there."], correctAnswer: "The students left their bags there.", image: null },
+                { id: 's2q3', question: "My friends and I ___ going to the cinema later.", options: ["is", "are", "am"], correctAnswer: "are", image: null },
+                { id: 's2q4', question: "She ___ to the market yesterday.", options: ["go", "goes", "went"], correctAnswer: "went", image: null },
+                { id: 's2q5', question: "The dog ___ loudly at the mailman.", options: ["bark", "barks", "barked"], correctAnswer: "barks", image: null }, // Present tense for habitual action
+                { id: 's2q6', question: "Identify the sentence with correct punctuation: What a beautiful day", options: ["What a beautiful day.", "What a beautiful day!", "What a beautiful day?"], correctAnswer: "What a beautiful day!", image: null },
+                { id: 's2q7', question: "Which of these needs an apostrophe for possession? The ___ tail wagged.", options: ["dogs", "dog's", "dogs's"], correctAnswer: "dog's", image: null },
+                { id: 's2q8', question: "___ many apples in the basket.", options: ["There is", "There are", "Their are"], correctAnswer: "There are", image: null },
+                { id: 's2q9', question: "He is ___ than his brother.", options: ["tall", "taller", "tallest"], correctAnswer: "taller", image: null },
+                { id: 's2q10', question: "We need to buy ___ milk, eggs, and bread.", options: ["milk eggs and bread", "milk, eggs and bread", "milk, eggs, and bread"], correctAnswer: "milk, eggs, and bread", image: null },
+                { id: 's2q11', question: "___ you finished your homework?", options: ["Has", "Have", "Had"], correctAnswer: "Have", image: null },
+                { id: 's2q12', question: "The birds ___ sweetly in the morning.", options: ["sing", "sings", "sung"], correctAnswer: "sing", image: null },
+                { id: 's2q13', question: "It's important ___ be on time.", options: ["to", "too", "two"], correctAnswer: "to", image: null },
+                { id: 's2q14', question: "The book on the shelf ___ mine.", options: ["is", "are", "be"], correctAnswer: "is", image: null },
+                { id: 's2q15', question: "Please put the vase ___ the table.", options: ["in", "on", "at"], correctAnswer: "on", image: null },
+                { id: 's2q16', question: "She ___ a delicious cake for the party last night.", options: ["bake", "bakes", "baked"], correctAnswer: "baked", image: null },
+                { id: 's2q17', question: "Which punctuation mark ends a question?", options: [". (Full stop)", "! (Exclamation mark)", "? (Question mark)"], correctAnswer: "? (Question mark)", image: null },
+                { id: 's2q18', question: "An apostrophe in 'don't' shows:", options: ["Possession", "A missing letter (contraction)", "Plural"], correctAnswer: "A missing letter (contraction)", image: null },
+                { id: 's2q19', question: "Which sentence is correct? 'The childrens toys are scattered.'", options: ["The children's toys are scattered.", "The childrens' toys are scattered.", "The childrens toys' are scattered."], correctAnswer: "The children's toys are scattered.", image: null },
+                { id: 's2q20', question: "Tomorrow, we ___ visit our grandparents.", options: ["will visit", "visited", "visits"], correctAnswer: "will visit", image: null }
+            ],
+            // --- SET 3: Descriptive Writing & Vocabulary ---
+            [
+                { id: 's3q1', question: "Which word makes this sentence more descriptive? 'The flower was red.'", options: ["nice", "big", "crimson"], correctAnswer: "crimson", image: null },
+                { id: 's3q2', question: "A simile compares two things using 'like' or ___.", options: ["than", "as", "but"], correctAnswer: "as", image: null },
+                { id: 's3q3', question: "Which is an example of a simile?", options: ["The sun is a golden coin.", "He runs as fast as the wind.", "The wind whispered secrets."], correctAnswer: "He runs as fast as the wind.", image: null },
+                { id: 's3q4', question: "Descriptive writing appeals to the reader's ___.", options: ["logic only", "senses (sight, sound, smell, taste, touch)", "memory only"], correctAnswer: "senses (sight, sound, smell, taste, touch)", image: null },
+                { id: 's3q5', question: "Choose a stronger verb for 'walked': He ___ slowly down the path.", options: ["went", "ambled", "moved"], correctAnswer: "ambled", image: null },
+                { id: 's3q6', question: "What does 'show, don't tell' mean in writing?", options: ["Use pictures instead of words.", "Describe actions and feelings rather than stating them directly.", "Tell the reader everything explicitly."], correctAnswer: "Describe actions and feelings rather than stating them directly.", image: null },
+                { id: 's3q7', question: "Which sentence 'shows' sadness better? 'She was sad.' vs 'Tears welled up in her eyes.'", options: ["She was sad.", "Tears welled up in her eyes.", "Both are equally good."], correctAnswer: "Tears welled up in her eyes.", image: null },
+                { id: 's3q8', question: "Using vivid adjectives helps to:", options: ["Make the story shorter.", "Create a clearer picture in the reader's mind.", "Confuse the reader."], correctAnswer: "Create a clearer picture in the reader's mind.", image: null },
+                { id: 's3q9', question: "The old house had a ___ atmosphere. (Choose the best descriptive word)", options: ["good", "eerie", "fast"], correctAnswer: "eerie", image: null },
+                { id: 's3q10', question: "A metaphor says something ___ something else.", options: ["is like", "is", "is not"], correctAnswer: "is", image: null },
+                { id: 's3q11', question: "Which is an example of a metaphor? 'Her smile was a ray of sunshine.'", options: ["Her smile was like sunshine.", "Her smile was bright.", "Her smile was a ray of sunshine."], correctAnswer: "Her smile was a ray of sunshine.", image:null },
+                { id: 's3q12', question: "Personification gives ___ qualities to non-human things.", options: ["animal", "human", "plant"], correctAnswer: "human", image: null },
+                { id: 's3q13', question: "Which sentence uses personification? 'The wind howled through the trees.'", options: ["The wind was strong.", "The wind howled through the trees.", "I heard the wind."], correctAnswer: "The wind howled through the trees.", image: null },
+                { id: 's3q14', question: "To make your writing more interesting, you should use a ___ of vocabulary.", options: ["limited range", "wide range", "repetitive set"], correctAnswer: "wide range", image: null },
+                { id: 's3q15', question: "A synonym for 'happy' is:", options: ["sad", "joyful", "angry"], correctAnswer: "joyful", image: null },
+                { id: 's3q16', question: "An antonym for 'brave' is:", options: ["courageous", "fearful", "strong"], correctAnswer: "fearful", image: null },
+                { id: 's3q17', question: "The sound of crunching leaves appeals to which sense?", options: ["Sight", "Smell", "Hearing"], correctAnswer: "Hearing", image: null },
+                { id: 's3q18', question: "The sweet aroma of baking cookies appeals to which sense?", options: ["Touch", "Smell", "Sight"], correctAnswer: "Smell", image: null },
+                { id: 's3q19', question: "Instead of 'The food was good,' a more descriptive phrase is:", options: ["The food was okay.", "The food was very nice.", "The succulent steak melted in my mouth."], correctAnswer: "The succulent steak melted in my mouth.", image: null },
+                { id: 's3q20', question: "The sky was a 'vast, azure canvas.' 'Azure' describes a shade of:", options: ["Green", "Blue", "Red"], correctAnswer: "Blue", image: null }
+            ],
+            // --- SET 4: Show, Don't Tell & Dialogue ---
+            [
+                { id: 's4q1', question: "Which sentence 'shows' excitement? 'He was excited.' vs 'His heart pounded as he ripped open the gift.'", options: ["He was excited.", "His heart pounded as he ripped open the gift.", "Both show excitement equally."], correctAnswer: "His heart pounded as he ripped open the gift.", image: null },
+                { id: 's4q2', question: "Dialogue is:", options: ["The narrator's thoughts.", "A description of the setting.", "Conversation between characters."], correctAnswer: "Conversation between characters.", image: null },
+                { id: 's4q3', question: "Which punctuation mark is used to enclose direct speech?", options: [", (Comma)", ". (Full stop)", "\" \" (Quotation marks/Speech marks)"], correctAnswer: "\" \" (Quotation marks/Speech marks)", image: null },
+                { id: 's4q4', question: "Where should the comma go? \"I am tired\" she said.", options: ["\"I am tired,\" she said.", "\"I am tired\" she, said.", "\"I am, tired\" she said."], correctAnswer: "\"I am tired,\" she said.", image: null },
+                { id: 's4q5', question: "When a new person speaks in dialogue, you should usually:", options: ["Continue in the same paragraph.", "Start a new paragraph.", "Use italics."], correctAnswer: "Start a new paragraph.", image: null },
+                { id: 's4q6', question: "A dialogue tag (e.g., 'he whispered', 'she shouted') tells us:", options: ["What the character is thinking.", "Who is speaking and how.", "Where the story is set."], correctAnswer: "Who is speaking and how.", image: null },
+                { id: 's4q7', question: "Choose the correctly punctuated dialogue: He asked \"Are you coming?\"", options: ["He asked, \"Are you coming?\"", "He asked \"Are you coming\"?", "He asked, Are you coming?."], correctAnswer: "He asked, \"Are you coming?\"", image: null },
+                { id: 's4q8', question: "Instead of 'She was angry,' which sentence 'shows' anger?", options: ["She felt very cross.", "Her face turned red and she clenched her fists.", "Anger filled her heart."], correctAnswer: "Her face turned red and she clenched her fists.", image: null },
+                { id: 's4q9', question: "What is wrong with: \"I want to go home.\" He said.", options: ["Missing comma before 'He said'.", "Quotation marks are wrong.", "The period should be inside the quotation marks."], correctAnswer: "The period should be inside the quotation marks.", image: null }, // "I want to go home," he said. OR "I want to go home." He then... This is tricky. The most common correction is "I want to go home," he said.
+                { id: 's4q10', question: "Which option 'shows' nervousness? 'She was nervous.' vs 'Her palms were sweaty and her voice trembled.'", options: ["She was nervous.", "Her palms were sweaty and her voice trembled.", "Both are the same."], correctAnswer: "Her palms were sweaty and her voice trembled.", image: null },
+                { id: 's4q11', question: "If a question is asked in dialogue, the question mark goes ___ the closing quotation mark.", options: ["outside", "inside", "after the dialogue tag"], correctAnswer: "inside", image: null },
+                { id: 's4q12', question: "\"Stop!\" he yelled. The exclamation mark should be:", options: ["Inside the quotation marks.", "Outside the quotation marks.", "Replaced with a comma."], correctAnswer: "Inside the quotation marks.", image: null },
+                { id: 's4q13', question: "Using varied dialogue tags (e.g., mumbled, exclaimed, questioned) makes dialogue more:", options: ["Confusing", "Repetitive", "Engaging"], correctAnswer: "Engaging", image: null },
+                { id: 's4q14', question: "Tell: 'The room was messy.' Show: ?", options: ["The room was very untidy.", "Clothes were strewn on the floor, books piled precariously, and drawers hung open.", "Messiness was everywhere."], correctAnswer: "Clothes were strewn on the floor, books piled precariously, and drawers hung open.", image: null },
+                { id: 's4q15', question: "Dialogue can help to reveal a character's ___.", options: ["height and weight", "favourite food", "personality and feelings"], correctAnswer: "personality and feelings", image: null },
+                { id: 's4q16', question: "What is a monologue?", options: ["A conversation between two characters.", "A long speech by one character.", "The story's introduction."], correctAnswer: "A long speech by one character.", image: null },
+                { id: 's4q17', question: "Tell: 'The dog was happy.' Show: ?", options: ["The dog felt great joy.", "The dog wagged its tail furiously and jumped up, licking his face.", "Happiness was the dog's emotion."], correctAnswer: "The dog wagged its tail furiously and jumped up, licking his face.", image: null },
+                { id: 's4q18', question: "Correct punctuation: \"Watch out\" she screamed.", options: ["\"Watch out!\" she screamed.", "\"Watch out,\" she screamed!", "\"Watch out!\", she screamed."], correctAnswer: "\"Watch out!\" she screamed.", image: null },
+                { id: 's4q19', question: "Why is 'showing' often more effective than 'telling'?", options: ["It's always shorter.", "It allows the reader to infer and feel more involved.", "It's easier to write."], correctAnswer: "It allows the reader to infer and feel more involved.", image: null },
+                { id: 's4q20', question: "If a character's speech is interrupted, you can use:", options: ["A full stop.", "An ellipsis (...) or an em dash (—).", "A semicolon (;)."], correctAnswer: "An ellipsis (...) or an em dash (—).", image: null }
+            ],
+            // --- SET 5: Mixed Review & Sentence Structure ---
+            [
+                { id: 's5q1', question: "A sentence that makes a statement and ends with a full stop is called a ___ sentence.", options: ["interrogative", "declarative", "exclamatory"], correctAnswer: "declarative", image: null },
+                { id: 's5q2', question: "A ___ sentence asks a question and ends with a question mark.", options: ["imperative", "declarative", "interrogative"], correctAnswer: "interrogative", image: null },
+                { id: 's5q3', question: "A simple sentence has one ___.", options: ["independent clause", "dependent clause", "conjunction"], correctAnswer: "independent clause", image: null },
+                { id: 's5q4', question: "Which is a compound sentence? 'The rain fell, and the wind blew.'", options: ["The rain fell.", "The wind blew.", "The rain fell, and the wind blew."], correctAnswer: "The rain fell, and the wind blew.", image: null },
+                { id: 's5q5', question: "Conjunctions like 'and', 'but', 'or' are used to ___.", options: ["Separate ideas", "Join words, phrases, or clauses", "Describe nouns"], correctAnswer: "Join words, phrases, or clauses", image: null },
+                { id: 's5q6', question: "Using a variety of sentence ___ makes writing more interesting.", options: ["endings only", "lengths and structures", "topics only"], correctAnswer: "lengths and structures", image: null },
+                { id: 's5q7', question: "A run-on sentence occurs when:", options: ["A sentence is too short.", "Two or more independent clauses are joined incorrectly.", "A sentence has too many adjectives."], correctAnswer: "Two or more independent clauses are joined incorrectly.", image: null },
+                { id: 's5q8', question: "A sentence fragment is:", options: ["A very long sentence.", "An incomplete sentence missing a subject or verb.", "A sentence with perfect grammar."], correctAnswer: "An incomplete sentence missing a subject or verb.", image: null },
+                { id: 's5q9', question: "Transition words like 'however', 'therefore', 'next' help to:", options: ["Create confusion", "Show relationships between ideas and improve flow", "Make sentences longer"], correctAnswer: "Show relationships between ideas and improve flow", image: null },
+                { id: 's5q10', question: "Which transition word shows contrast? 'He studied hard; ___, he failed the test.'", options: ["therefore", "however", "additionally"], correctAnswer: "however", image: null },
+                { id: 's5q11', question: "The 'tone' of a piece of writing refers to the ___.", options: ["author's attitude towards the subject or reader", "number of paragraphs", "length of the story"], correctAnswer: "author's attitude towards the subject or reader", image: null },
+                { id: 's5q12', question: "The 'mood' of a story is the ___ it creates in the reader.", options: ["summary", "atmosphere or feeling", "character list"], correctAnswer: "atmosphere or feeling", image: null },
+                { id: 's5q13', question: "What is the purpose of a topic sentence in a paragraph?", options: ["To conclude the paragraph.", "To introduce the main idea of the paragraph.", "To provide a supporting detail."], correctAnswer: "To introduce the main idea of theparagraph.", image: null },
+                { id: 's5q14', question: "Supporting sentences in a paragraph should:", options: ["Introduce new main ideas.", "Elaborate on or support the topic sentence.", "Be unrelated to the topic sentence."], correctAnswer: "Elaborate on or support the topic sentence.", image: null },
+                { id: 's5q15', question: "Which of these is NOT a type of figurative language?", options: ["Simile", "Metaphor", "Paragraph"], correctAnswer: "Paragraph", image: null },
+                { id: 's5q16', question: "Good writers often ___ their work to check for errors and improve clarity.", options: ["ignore", "revise and edit", "shorten"], correctAnswer: "revise and edit", image: null },
+                { id: 's5q17', question: "Clarity in writing means:", options: ["Using complex vocabulary.", "The meaning is easy to understand.", "The writing is very long."], correctAnswer: "The meaning is easy to understand.", image: null },
+                { id: 's5q18', question: "A story told from the 'first-person' point of view uses pronouns like:", options: ["He, she, they", "You, your", "I, me, my, we"], correctAnswer: "I, me, my, we", image: null },
+                { id: 's5q19', question: "A story told from 'third-person' point of view uses pronouns like:", options: ["I, me, mine", "He, she, it, they", "You, yours"], correctAnswer: "He, she, it, they", image: null },
+                { id: 's5q20', question: "To avoid repetition, use ___ and varied sentence structures.", options: ["the same words often", "synonyms", "only short sentences"], correctAnswer: "synonyms", image: null }
+            ]
+        ];
+
+
+        // --- State Variables ---
+        let questionSets = []; // This will be populated from allEnglishQuestionsBySet
+        let currentSetData = []; // Holds the actual question objects for the current set
+        let currentQuestionIndex = 0;
+        let score = 0;
+        let incorrectAnswers = [];
+        let startTime;
+        let endTime;
+        let isRedoing = false;
+        let proceedTimeoutId = null;
+        let isWaitingToProceed = false;
+        let selectedSetNumberGlobal = 0; // To keep track of the selected set number
+        let WEBHOOK_URL = localStorage.getItem(WEBHOOK_URL_STORAGE_KEY) || DEFAULT_WEBHOOK_URL;
+        let userName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+
+        // --- Sound Synthesis (Tone.js) ---
+        const correctSound = new Tone.Synth({ oscillator: { type: 'triangle' }, envelope: { attack: 0.005, decay: 0.1, sustain: 0.05, release: 0.2 }, }).toDestination();
+        const incorrectSound = new Tone.Synth({ oscillator: { type: 'square' }, envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.2 } }).toDestination();
+
+        // --- Confetti ---
+        const confettiCanvas = document.getElementById('confettiCanvas');
+        const myConfetti = confetti.create(confettiCanvas, { resize: true, useWorker: true });
+
+        // --- DOM Elements ---
+        const nameModal = document.getElementById('nameModal');
+        const userNameInput = document.getElementById('userNameInput');
+        const setSelectionScreen = document.getElementById('setSelectionScreen');
+        const setButtonsContainer = document.getElementById('setButtonsContainer');
+        const flashcardScreen = document.getElementById('flashcardScreen');
+        const resultsScreen = document.getElementById('resultsScreen');
+        const progressText = document.getElementById('progressText');
+        const progressBarFill = document.getElementById('progressBarFill');
+        const flashcard = document.getElementById('flashcard');
+        const questionImageEl = document.getElementById('questionImage');
+        const questionText = document.getElementById('questionText');
+        const feedbackText = document.getElementById('feedbackText');
+        const continueText = document.getElementById('continueText');
+        const choiceButtons = [ document.getElementById('choice1'), document.getElementById('choice2'), document.getElementById('choice3') ];
+        const scoreDisplayEl = document.getElementById('scoreDisplay');
+        const percentageEl = document.getElementById('percentage');
+        const timeTakenEl = document.getElementById('timeTaken');
+        const incorrectListContainer = document.getElementById('incorrectListContainer');
+        const incorrectList = document.getElementById('incorrectList');
+        const noIncorrectText = document.getElementById('noIncorrectText');
+        const redoIncorrectButton = document.getElementById('redoIncorrectButton');
+        const webhookModal = document.getElementById('webhookModal');
+        const webhookUrlInput = document.getElementById('webhookUrlInput');
+        const encouragementTextEl = document.getElementById('encouragementText');
+        const resultsHeadingEl = document.getElementById('resultsHeading');
+        const raceTrackContainer = document.querySelector('#resultsScreen .race-track-container');
+        const raceTrackFillEl = document.getElementById('raceTrackFill');
+        const rocketEl = document.getElementById('rocketEl');
+
+
+        flashcard.addEventListener('click', () => { if (isWaitingToProceed) proceedToNext(); });
+        userNameInput.addEventListener('keypress', (event) => { if (event.key === 'Enter') { event.preventDefault(); saveUserName(); }});
+
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        }
+
+        function populateSetButtons() {
+            setButtonsContainer.innerHTML = ''; // Clear existing buttons
+            const setColors = ['bg-sky-500 hover:bg-sky-600', 'bg-cyan-500 hover:bg-cyan-600', 'bg-teal-500 hover:bg-teal-600', 'bg-indigo-500 hover:bg-indigo-600', 'bg-purple-500 hover:bg-purple-600'];
+            const setNames = ["Set 1: Story Elements", "Set 2: Grammar & Punct.", "Set 3: Descriptive Writing", "Set 4: Show, Don't Tell", "Set 5: Mixed Review"];
+
+            allEnglishQuestionsBySet.forEach((set, index) => {
+                if (set.length >= QUESTIONS_PER_SET) { // Only add button if set has enough questions
+                    const button = document.createElement('button');
+                    button.textContent = setNames[index] || `Set ${index + 1}`;
+                    button.className = `action-button text-white w-full py-3 px-6 ${setColors[index % setColors.length]}`;
+                    button.onclick = () => selectSet(index + 1);
+                    setButtonsContainer.appendChild(button);
+                } else {
+                    console.warn(`Set ${index+1} has only ${set.length} questions, less than required ${QUESTIONS_PER_SET}. Not adding button.`);
+                }
+            });
+        }
+
+
+        function prepareQuestionSets() {
+            // Directly use the structured allEnglishQuestionsBySet
+            // Ensure each set is shuffled internally if desired for replayability of the same set
+            questionSets = allEnglishQuestionsBySet.map(set => {
+                if (set.length >= QUESTIONS_PER_SET) {
+                    let setToShuffle = [...set]; // Create a copy
+                    shuffleArray(setToShuffle); // Shuffle the copy
+                    return setToShuffle.slice(0, QUESTIONS_PER_SET); // Take the first 20
+                }
+                return []; // Return empty if not enough questions
+            }).filter(set => set.length === QUESTIONS_PER_SET); // Only keep valid sets
+
+             if (questionSets.length < allEnglishQuestionsBySet.length) {
+                console.warn(`Some predefined sets did not meet the ${QUESTIONS_PER_SET} question requirement after filtering.`);
+             }
+             console.log(`Prepared ${questionSets.length} valid sets for play.`);
+        }
+
+
+         function saveUserName() {
+            const name = userNameInput.value.trim();
+            userName = name ? name : 'Anonymous';
+            localStorage.setItem(USER_NAME_STORAGE_KEY, userName);
+            nameModal.style.display = 'none';
+            showSetSelection();
+        }
+
+
+        function selectSet(setNumber) { // setNumber is 1-based
+            Tone.start().catch(e => console.warn("Audio context error:", e));
+
+            if (setNumber < 1 || setNumber > questionSets.length) {
+                alert(`Set ${setNumber} is not available. Please check console.`);
+                console.error(`Invalid set number: ${setNumber}. Available sets: ${questionSets.length}`);
+                return;
+            }
+            currentSetData = [...questionSets[setNumber - 1]]; // Use a copy of the prepared (and possibly shuffled) set
+            selectedSetNumberGlobal = setNumber;
+
+            currentQuestionIndex = 0;
+            score = 0;
+            incorrectAnswers = [];
+            isRedoing = false;
+            
+            setSelectionScreen.classList.add('hidden');
+            resultsScreen.classList.add('hidden');
+            flashcardScreen.classList.remove('hidden');
+            startTime = new Date();
+            displayQuestion();
+        }
+
+        function resetCardState() {
+            if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); proceedTimeoutId = null; }
+            isWaitingToProceed = false;
+            flashcard.classList.remove('shake', 'correct-flip', 'incorrect-state', 'clickable-card');
+            flashcard.style.backgroundColor = ''; flashcard.style.color = '';
+            questionText.style.color = ''; feedbackText.style.color = '';
+            feedbackText.textContent = '';
+            feedbackText.className = 'mt-2 text-base md:text-lg font-semibold';
+            flashcard.style.cursor = 'default';
+            continueText.classList.add('hidden');
+            questionImageEl.classList.add('hidden'); questionImageEl.src = '';
+        }
+
+        function displayQuestion() {
+            resetCardState();
+            if (currentQuestionIndex >= currentSetData.length) { showResults(); return; }
+
+            const questionData = currentSetData[currentQuestionIndex];
+            questionText.textContent = questionData.question;
+            if (questionData.image) { questionImageEl.src = questionData.image; questionImageEl.classList.remove('hidden'); }
+            
+            let displayOptions = [...questionData.options];
+            shuffleArray(displayOptions); // Shuffle options for display randomness
+
+            choiceButtons.forEach((button, index) => {
+                button.textContent = displayOptions[index];
+                button.disabled = false;
+                button.dataset.answer = displayOptions[index];
+                button.className = 'choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg';
+            });
+            updateProgress();
+        }
+        
+        function updateProgress() {
+            const totalQuestions = currentSetData.length;
+            const completed = currentQuestionIndex;
+            const progressPercentage = totalQuestions > 0 ? (completed / totalQuestions) * 100 : 0;
+            progressText.textContent = `${completed} / ${totalQuestions}`;
+            progressBarFill.style.width = `${progressPercentage}%`;
+        }
+
+        function checkAnswer(button) {
+            Tone.start().catch(e => console.warn("Audio context failed to start:", e));
+            if (isWaitingToProceed) return;
+
+            const selectedAnswer = button.dataset.answer;
+            const questionData = currentSetData[currentQuestionIndex];
+            const correctAnswer = questionData.correctAnswer;
+
+            choiceButtons.forEach(btn => btn.disabled = true);
+
+            if (selectedAnswer === correctAnswer) {
+                if (!isRedoing) score++;
+                flashcard.classList.add('correct-flip');
+                feedbackText.textContent = 'Correct!';
+                button.className = 'choice-button bg-emerald-500 text-white ring-2 ring-emerald-700 text-base md:text-lg';
+                myConfetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+                correctSound.triggerAttackRelease("G5", "8n", Tone.now());
+            } else {
+                flashcard.classList.add('shake', 'incorrect-state');
+                feedbackText.innerHTML = `Correct Answer: <span class="font-bold">${correctAnswer}</span>`;
+                button.className = 'choice-button bg-red-500 text-white ring-2 ring-red-700 text-base md:text-lg';
+                choiceButtons.forEach(btn => {
+                     if (btn.dataset.answer === correctAnswer) {
+                         btn.className = 'choice-button bg-emerald-100 border-2 border-emerald-400 text-emerald-700 font-bold text-base md:text-lg opacity-90';
+                     }
+                });
+                incorrectSound.triggerAttackRelease("C3", "8n");
+                incorrectAnswers.push({ questionData: JSON.parse(JSON.stringify(questionData)), userAnswer: selectedAnswer });
+            }
+            isWaitingToProceed = true;
+            flashcard.classList.add('clickable-card'); flashcard.style.cursor = 'pointer';
+            continueText.classList.remove('hidden');
+            if (proceedTimeoutId) clearTimeout(proceedTimeoutId);
+            proceedTimeoutId = setTimeout(proceedToNext, AUTO_PROCEED_DELAY);
+            currentQuestionIndex++;
+        }
+
+        function proceedToNext() {
+             if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); proceedTimeoutId = null; }
+             isWaitingToProceed = false;
+             displayQuestion();
+        }
+
+        function showResults() {
+            endTime = new Date();
+            const timeDiff = Math.round((endTime - startTime) / 1000);
+            const totalQuestions = currentSetData.length;
+            const currentScore = isRedoing ? (totalQuestions - incorrectAnswers.length) : score;
+            const percentage = totalQuestions > 0 ? Math.round((currentScore / totalQuestions) * 100) : 0;
+
+            resultsHeadingEl.textContent = isRedoing ? 'Review Complete!' : `Set ${selectedSetNumberGlobal} Complete!`;
+            scoreDisplayEl.textContent = `${currentScore} / ${totalQuestions}`;
+            percentageEl.textContent = `${percentage}`;
+            timeTakenEl.textContent = `${timeDiff}s`;
+
+            if (percentage === 100) encouragementTextEl.textContent = isRedoing ? "Perfect review!" : "Fantastic job! Mastered!";
+            else if (percentage >= 70) encouragementTextEl.textContent = isRedoing ? "Good review!" : "Great effort! Keep it up!";
+            else encouragementTextEl.textContent = isRedoing ? "Keep reviewing!" : "Practice makes perfect!";
+            encouragementTextEl.className = `text-lg font-semibold mb-6 ${percentage === 100 ? 'text-emerald-700' : percentage >= 70 ? 'text-sky-700' : 'text-orange-700'}`;
+
+            flashcardScreen.classList.add('hidden');
+            resultsScreen.classList.remove('hidden');
+
+            const trackWidth = raceTrackContainer.offsetWidth, effectiveTrackWidth = trackWidth - 24;
+            const animationDuration = 1500, animStartTime = performance.now();
+            rocketEl.style.left = '0px'; raceTrackFillEl.style.width = '0px';
+            function animateRocket(currentTime) {
+                const elapsedTime = currentTime - animStartTime, progress = Math.min(elapsedTime / animationDuration, 1);
+                const animatedPercentage = Math.round(progress * percentage);
+                const position = Math.max(0, (animatedPercentage / 100) * effectiveTrackWidth);
+                rocketEl.style.left = `${position}px`; raceTrackFillEl.style.width = `${position}px`;
+                if (progress < 1) requestAnimationFrame(animateRocket);
+                else {
+                     const finalPos = Math.max(0, (percentage / 100) * effectiveTrackWidth);
+                     rocketEl.style.left = `${finalPos}px`; raceTrackFillEl.style.width = `${finalPos}px`;
+                }
+            }
+            requestAnimationFrame(animateRocket);
+
+            incorrectList.innerHTML = '';
+            if (incorrectAnswers.length > 0) {
+                incorrectListContainer.classList.remove('hidden'); noIncorrectText.classList.add('hidden');
+                incorrectAnswers.forEach(item => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `<b>Q:</b> ${item.questionData.question}<br/>` +
+                                   `<b>Your:</b> <span class="text-red-500">${item.userAnswer}</span><br/>` +
+                                   `<b>Correct:</b> <span class="text-emerald-600">${item.questionData.correctAnswer}</span>`;
+                    incorrectList.appendChild(li);
+                });
+                redoIncorrectButton.classList.toggle('hidden', isRedoing);
+            } else {
+                incorrectListContainer.classList.add('hidden'); noIncorrectText.classList.remove('hidden');
+                redoIncorrectButton.classList.add('hidden');
+            }
+
+            sendResultsToWebhook({
+                name: userName, set: selectedSetNumberGlobal, score: currentScore, totalQuestions, percentage, timeTaken: timeDiff,
+                incorrectAnswersData: incorrectAnswers.map(i => ({ q: i.questionData.question, u: i.userAnswer, c: i.questionData.correctAnswer })),
+                isRedoing, os: navigator.platform || 'N/A', deviceTime: new Date().toString(), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'N/A'
+            });
+            if (isRedoing) { incorrectAnswers = []; isRedoing = false; }
+        }
+
+        function redoIncorrect() {
+            const questionsToRedo = incorrectAnswers.map(item => item.questionData);
+            if (questionsToRedo.length === 0) { alert("No incorrect answers to redo!"); return; }
+            currentSetData = questionsToRedo;
+            shuffleArray(currentSetData); // Shuffle the incorrect questions for the redo round
+            currentQuestionIndex = 0;
+            incorrectAnswers = []; // Clear for this new redo attempt
+            isRedoing = true;
+            resultsScreen.classList.add('hidden'); flashcardScreen.classList.remove('hidden');
+            startTime = new Date();
+            displayQuestion();
+        }
+
+        function showSetSelection() {
+            if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); proceedTimeoutId = null; }
+            isWaitingToProceed = false; isRedoing = false;
+            nameModal.style.display = 'none';
+            flashcardScreen.classList.add('hidden'); resultsScreen.classList.add('hidden');
+            setSelectionScreen.classList.remove('hidden');
+            progressText.textContent = `0 / ${QUESTIONS_PER_SET}`; progressBarFill.style.width = '0%';
+            prepareQuestionSets(); // Re-prepare sets, possibly re-shuffling them for new attempts
+            populateSetButtons(); // Re-populate buttons in case question counts changed or for freshness
+            if (!document.getElementById('webhookSettingsButton')) addWebhookSettingsButton();
+        }
+
+        function sendResultsToWebhook(data) { /* ... (same as before, ensure URL check is robust) ... */
+            if (!WEBHOOK_URL || (WEBHOOK_URL === DEFAULT_WEBHOOK_URL && !localStorage.getItem(WEBHOOK_URL_STORAGE_KEY) && DEFAULT_WEBHOOK_URL.includes('xxxx'))) {
+                if (!localStorage.getItem(WEBHOOK_URL_STORAGE_KEY) && DEFAULT_WEBHOOK_URL.includes('xxxx')) {
+                   console.log("Webhook URL is a placeholder or not set. Skipping."); return;
+                }
+           }
+           if (!navigator.onLine) { console.warn("Offline. Skipping webhook."); return; }
+           fetch(WEBHOOK_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', }, body: JSON.stringify(data), })
+           .then(res => res.ok ? res.json().catch(()=>res.text()) : res.text().then(t => { throw new Error(`Webhook Error ${res.status}: ${t}`) }))
+           .then(d => console.log('Webhook success:', d)).catch(e => console.error('Webhook fetch error:', e));
+        }
+        function openWebhookModal() { /* ... (same as before) ... */
+            webhookUrlInput.value = (WEBHOOK_URL === DEFAULT_WEBHOOK_URL && !localStorage.getItem(WEBHOOK_URL_STORAGE_KEY) && DEFAULT_WEBHOOK_URL.includes('xxxx')) ? '' : WEBHOOK_URL;
+            webhookModal.style.display = 'flex';
+        }
+        function closeWebhookModal() { webhookModal.style.display = 'none'; }
+        function saveWebhookUrl() { /* ... (same as before) ... */
+            const url = webhookUrlInput.value.trim();
+            try {
+                if (url) { new URL(url); WEBHOOK_URL = url; localStorage.setItem(WEBHOOK_URL_STORAGE_KEY, url); }
+                else { WEBHOOK_URL = DEFAULT_WEBHOOK_URL; localStorage.removeItem(WEBHOOK_URL_STORAGE_KEY); }
+                closeWebhookModal();
+            } catch (_) {
+                 if (url.startsWith('https://hook.') && (url.includes('.make.com/') || url.includes('.integromat.com/'))) {
+                    WEBHOOK_URL = url; localStorage.setItem(WEBHOOK_URL_STORAGE_KEY, url); closeWebhookModal();
+                 } else { alert("Invalid URL. Please enter a valid webhook URL."); }
+            }
+        }
+        function addWebhookSettingsButton() { /* ... (same as before, ensure parent for button is robust) ... */
+            if (document.getElementById('webhookSettingsButton')) return;
+            const btn = document.createElement('button');
+            btn.textContent = 'Webhook Settings'; btn.id = 'webhookSettingsButton';
+            btn.className = 'action-button mt-6 bg-slate-400 hover:bg-slate-500 text-white w-full text-sm py-3 px-6';
+            btn.onclick = openWebhookModal;
+            setSelectionScreen.appendChild(btn); // Append directly to setSelectionScreen
+        }
+
+         document.addEventListener('DOMContentLoaded', () => {
+            prepareQuestionSets(); // Prepare sets from the hardcoded data
+            populateSetButtons();  // Create buttons for available sets
+
+            if (questionSets.length === 0) { // Check if any valid sets were prepared
+                document.body.innerHTML = `<div class="text-center p-8 bg-red-100 text-red-700">
+                    <h1 class="text-2xl font-bold">Error: No Valid Question Sets</h1>
+                    <p>Please ensure 'allEnglishQuestionsBySet' in the script has sets with at least ${QUESTIONS_PER_SET} questions each.</p>
+                </div>`;
+                return;
+            }
+            userName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+            if (userName) showSetSelection();
+            else { nameModal.style.display = 'flex'; userNameInput.focus(); }
+            addWebhookSettingsButton();
+         });
+    </script>
+</body>
+</html>
