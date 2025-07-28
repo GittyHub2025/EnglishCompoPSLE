@@ -178,23 +178,20 @@
         </div>
     </div>
 
-    <!-- Firebase SDK - IMPORTANT: Replace with your actual project config -->
+    <!-- Firebase SDK -->
     <script type="module">
         // Import the functions you need from the Firebase SDKs
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
         import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
-        // Your web app's Firebase configuration
-        // You can find this in your Firebase project settings (Project overview -> Project settings -> Your apps)
-        // Look for the "Firebase SDK snippet" and select "Config"
+        // Your web app's Firebase configuration - INTEGRATED!
         const firebaseConfig = {
-            apiKey: "YOUR_API_KEY", // Example: "AIzaSyC0dE12345..."
-            authDomain: "YOUR_AUTH_DOMAIN", // Example: "parenthub-wq0zt.firebaseapp.com"
-            projectId: "YOUR_PROJECT_ID",   // Example: "parenthub-wq0zt"
-            storageBucket: "YOUR_STORAGE_BUCKET",
-            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-            appId: "YOUR_APP_ID", // Example: "1:936601743313:web:81c8540abe554a412c7af0"
-            // measurementId: "YOUR_MEASUREMENT_ID" // Only if you have Google Analytics enabled
+            apiKey: "AIzaSyCRPjkm8BLamgbHUfVhaTZoGsmk0ZgGGKA",
+            authDomain: "parenthub-wq0zt.firebaseapp.com",
+            projectId: "parenthub-wq0zt",
+            storageBucket: "parenthub-wq0zt.firebasestorage.app",
+            messagingSenderId: "936601743313",
+            appId: "1:936601743313:web:535403cd211c9c4c2c7af0"
         };
 
         // Initialize Firebase
@@ -317,15 +314,6 @@
                 statusElement.className = ''; // Clear styling
             }
         });
-const firebaseConfig = {
-  apiKey: "AIzaSyCRPjkm8BLamgbHUfVhaTZoGsmk0ZgGGKA",
-  authDomain: "parenthub-wq0zt.firebaseapp.com",
-  projectId: "parenthub-wq0zt",
-  storageBucket: "parenthub-wq0zt.firebasestorage.app",
-  messagingSenderId: "936601743313",
-  appId: "1:936601743313:web:81c8540abe554a412c7af0"
-};
-
     </script>
 </body>
 </html>
