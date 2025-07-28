@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ParentHub Authentication</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            color: #333;
+        }
+        .container {
+            background-color: #fff;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 480px;
+            text-align: center;
+            box-sizing: border-box;
+        }
+        h2, h3 {
+            color: #2c3e50;
+            margin-bottom: 25px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #555;
+        }
+        .form-group input[type="email"],
+        .form-group input[type="password"] {
+            width: calc(100% - 24px); /* Account for padding */
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 17px;
+            font-weight: bold;
+            width: 100%;
+            margin-top: 15px;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .google-btn {
+            background-color: #db4437; /* Google red */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        .google-btn img {
+            width: 20px;
+            height: 20px;
+        }
+        .google-btn:hover {
+            background-color: #c0392b;
+        }
+        .separator {
+            margin: 30px 0;
+            position: relative;
+            text-align: center;
+            color: #888;
+            font-size: 14px;
+        }
+        .separator::before,
+        .separator::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            width: 45%;
+            height: 1px;
+            background-color: #eee;
+        }
+        .separator::before {
+            left: 0;
+        }
+        .separator::after {
+            right: 0;
+        }
+        #auth-status {
+            margin-top: 25px;
+            padding: 15px;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 15px;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        #auth-status.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        #auth-status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        #auth-forms {
+            margin-top: 30px;
+        }
+        section {
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        section:last-of-type {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Welcome to ParentHub!</h2>
+        <div id="auth-status"></div>
+
+        <div id="auth-forms">
+            <!-- Sign Up Section -->
+            <section>
+                <h3>Create New Account</h3>
+                <div class="form-group">
+                    <label for="signup-email">Email:</label>
+                    <input type="email" id="signup-email" placeholder="Enter your email" required>
+                </div>
+                <div class="form-group">
+                    <label for="signup-password">Password:</label>
+                    <input type="password" id="signup-password" placeholder="Choose a strong password (min 6 characters)" required>
+                </div>
+                <button onclick="signUpWithEmail()">Sign Up with Email</button>
+            </section>
+
+            <div class="separator">OR</div>
+
+            <!-- Login Section -->
+            <section>
+                <h3>Login to Your Account</h3>
+                <div class="form-group">
+                    <label for="login-email">Email:</label>
+                    <input type="email" id="login-email" placeholder="Enter your email" required>
+                </div>
+                <div class="form-group">
+                    <label for="login-password">Password:</label>
+                    <input type="password" id="login-password" placeholder="Enter your password" required>
+                </div>
+                <button onclick="signInWithEmail()">Login with Email</button>
+            </section>
+
+            <div class="separator">OR</div>
+
+            <button class="google-btn" onclick="signInWithGoogle()">
+                <img src="https://img.icons8.com/color/48/000000/google-logo.png" alt="Google logo"/>
+                Login with Google
+            </button>
+        </div>
+    </div>
+
+    <!-- Firebase SDK - IMPORTANT: Replace with your actual project config -->
+    <script type="module">
+        // Import the functions you need from the Firebase SDKs
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+        // Your web app's Firebase configuration
+        // You can find this in your Firebase project settings (Project overview -> Project settings -> Your apps)
+        // Look for the "Firebase SDK snippet" and select "Config"
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY", // Example: "AIzaSyC0dE12345..."
+            authDomain: "YOUR_AUTH_DOMAIN", // Example: "parenthub-wq0zt.firebaseapp.com"
+            projectId: "YOUR_PROJECT_ID",   // Example: "parenthub-wq0zt"
+            storageBucket: "YOUR_STORAGE_BUCKET",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID", // Example: "1:936601743313:web:81c8540abe554a412c7af0"
+            // measurementId: "YOUR_MEASUREMENT_ID" // Only if you have Google Analytics enabled
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+
+        const statusElement = document.getElementById('auth-status');
+        const authForms = document.getElementById('auth-forms');
+
+        // Function to update status messages on the page
+        function updateStatus(message, type = 'success') {
+            statusElement.textContent = message;
+            statusElement.className = ''; // Clear previous classes
+            statusElement.classList.add(type);
+        }
+
+        // --- Firebase Authentication Functions ---
+
+        // Function to handle user sign-up with Email and Password
+        window.signUpWithEmail = function() {
+            const email = document.getElementById('signup-email').value;
+            const password = document.getElementById('signup-password').value;
+
+            if (!email || !password) {
+                updateStatus("Please enter both email and password to create an account.", "error");
+                return;
+            }
+
+            createUserWithEmailAndPassword(auth, email, password)
+                .then((userCredential) => {
+                    // Signed up successfully! The user is now logged in.
+                    const user = userCredential.user;
+                    console.log("Signed up user:", user);
+                    updateStatus(`Welcome, ${user.email}! Your account has been created.`);
+                    // Clear the form fields after successful sign-up
+                    document.getElementById('signup-email').value = '';
+                    document.getElementById('signup-password').value = '';
+                })
+                .catch((error) => {
+                    // Handle errors during sign-up
+                    const errorMessage = error.message;
+                    console.error("Sign up error:", error.code, errorMessage);
+                    updateStatus(`Sign up failed: ${errorMessage}`, "error");
+                });
+        };
+
+        // Function to handle user sign-in with Email and Password
+        window.signInWithEmail = function() {
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+
+            if (!email || !password) {
+                updateStatus("Please enter both email and password to log in.", "error");
+                return;
+            }
+
+            signInWithEmailAndPassword(auth, email, password)
+                .then((userCredential) => {
+                    // Signed in successfully!
+                    const user = userCredential.user;
+                    console.log("Signed in user:", user);
+                    updateStatus(`Welcome back, ${user.email}! You are now logged in.`);
+                    // Clear the form fields after successful login
+                    document.getElementById('login-email').value = '';
+                    document.getElementById('login-password').value = '';
+                })
+                .catch((error) => {
+                    // Handle errors during sign-in
+                    const errorMessage = error.message;
+                    console.error("Sign in error:", error.code, errorMessage);
+                    updateStatus(`Login failed: ${errorMessage}`, "error");
+                });
+        };
+
+        // Function to handle user sign-in with Google
+        window.signInWithGoogle = function() {
+            const provider = new GoogleAuthProvider();
+            signInWithPopup(auth, provider)
+                .then((result) => {
+                    // Signed in with Google successfully!
+                    const user = result.user;
+                    console.log("Signed in with Google:", user);
+                    updateStatus(`Welcome, ${user.displayName || user.email}! You are now logged in with Google.`);
+                }).catch((error) => {
+                    // Handle errors during Google sign-in
+                    const errorMessage = error.message;
+                    console.error("Google sign-in error:", error.code, errorMessage);
+                    updateStatus(`Google login failed: ${errorMessage}`, "error");
+                });
+        };
+
+        // Function to handle user sign-out
+        window.signOutUser = function() {
+            signOut(auth).then(() => {
+                // User signed out successfully
+                console.log("User signed out.");
+                updateStatus("You have been signed out.", "success");
+            }).catch((error) => {
+                // Handle errors during sign-out
+                console.error("Sign out error:", error);
+                updateStatus(`Sign out failed: ${error.message}`, "error");
+            });
+        };
+
+        // This listener keeps your UI updated based on the user's authentication state.
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                // User is signed in!
+                // We'll show a welcome message and a sign-out button.
+                let displayName = user.displayName || user.email; // Prefer display name if available
+                statusElement.innerHTML = `Welcome, <strong>${displayName}</strong>! You are logged in. <button id="signOutBtn" style="background-color: #f44336; margin-left: 10px; width: auto; padding: 8px 15px; font-size: 15px;">Sign Out</button>`;
+                document.getElementById('signOutBtn').addEventListener('click', window.signOutUser);
+                authForms.style.display = 'none'; // Hide the sign-up/login forms
+                statusElement.className = 'success'; // Ensure correct styling
+            } else {
+                // User is signed out.
+                // We'll show the sign-up/login forms.
+                statusElement.textContent = `No user signed in. Please sign in or create an account.`;
+                authForms.style.display = 'block'; // Show the sign-up/login forms
+                statusElement.className = ''; // Clear styling
+            }
+        });
+const firebaseConfig = {
+  apiKey: "AIzaSyCRPjkm8BLamgbHUfVhaTZoGsmk0ZgGGKA",
+  authDomain: "parenthub-wq0zt.firebaseapp.com",
+  projectId: "parenthub-wq0zt",
+  storageBucket: "parenthub-wq0zt.firebasestorage.app",
+  messagingSenderId: "936601743313",
+  appId: "1:936601743313:web:81c8540abe554a412c7af0"
+};
+
+    </script>
+</body>
+</html>
